@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu,  ext: tar.gz }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc,    ext: zip }
+          - { os: macos-latest,   target: aarch64-apple-darwin,      ext: tar.gz }
+          - { os: macos-latest,   target: x86_64-apple-darwin,       ext: tar.gz }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux bağımlılıkları
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libgl1-mesa-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Derle
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Paketle
+        shell: bash
+        run: |
+          NAME="vitrin-${{ github.ref_name }}-${{ matrix.target }}"
+          mkdir "$NAME"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cp target/${{ matrix.target }}/release/vitrin.exe "$NAME/"
+          else
+            cp target/${{ matrix.target }}/release/vitrin "$NAME/"
+          fi
+          cp README.md LICENSE "$NAME/"
+          if [ "${{ matrix.ext }}" = "zip" ]; then
+            7z a "$NAME.zip" "$NAME"
+          else
+            tar czf "$NAME.tar.gz" "$NAME"
+          fi
+          echo "ASSET=$NAME.${{ matrix.ext }}" >> "$GITHUB_ENV"
+      - name: Artifact yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ASSET }}
+      - name: GitHub Release'e ekle
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET }}
+          generate_release_notes: true
