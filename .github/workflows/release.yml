@@ -24,7 +24,7 @@ jobs:
           - { os: macos-latest,   target: aarch64-apple-darwin,      ext: tar.gz }
           - { os: macos-latest,   target: x86_64-apple-darwin,       ext: tar.gz }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Linux bağımlılıkları
         if: runner.os == 'Linux'
         run: |
